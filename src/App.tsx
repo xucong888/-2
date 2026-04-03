@@ -1,5 +1,8 @@
-import React, { useState, useEffect, Component } from 'react';
+import React, { useState, useEffect, Component, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
+import { LoadingSpinner } from './components/LoadingSpinner';
+import { ErrorMessage } from './components/ErrorMessage';
+import { SuccessToast } from './components/SuccessToast';
 import { 
   Sparkles, 
   Calendar, 
@@ -210,7 +213,7 @@ export default function App() {
     }
   };
 
-  const getLunarDateDisplay = (year: number, month: number, day: number, type: 'solar' | 'lunar') => {
+  const getLunarDateDisplay = useCallback((year: number, month: number, day: number, type: 'solar' | 'lunar') => {
     try {
       if (type === 'solar') {
         const solar = Solar.fromYmd(year, month, day);
@@ -223,9 +226,9 @@ export default function App() {
     } catch (e) {
       return '';
     }
-  };
+  }, []);
 
-  const getSolarDateDisplay = (year: number, month: number, day: number, type: 'solar' | 'lunar') => {
+  const getSolarDateDisplay = useCallback((year: number, month: number, day: number, type: 'solar' | 'lunar') => {
     try {
       if (type === 'lunar') {
         const lunar = Lunar.fromYmd(year, month, day);
@@ -237,15 +240,15 @@ export default function App() {
     } catch (e) {
       return '';
     }
-  };
+  }, []);
 
-  const getShichen = (hour: number) => {
+  const getShichen = useCallback((hour: number) => {
     const shichen = ['子', '丑', '寅', '卯', '辰', '巳', '午', '未', '申', '酉', '戌', '亥'];
     const index = Math.floor((hour + 1) / 2) % 12;
     return shichen[index] + '时';
-  };
+  }, []);
 
-  const getOtherCalendarPreview = () => {
+  const getOtherCalendarPreview = useCallback(() => {
     try {
       const shichenStr = getShichen(birthInfo.hour);
       if (birthInfo.calendarType === 'solar') {
@@ -260,16 +263,16 @@ export default function App() {
     } catch (e) {
       return '日期无效';
     }
-  };
+  }, [birthInfo, getShichen]);
 
-  const getElementColor = (char: string) => {
+  const getElementColor = useCallback((char: string) => {
     if ('甲乙寅卯'.includes(char)) return 'text-emerald-600'; // 木
     if ('丙丁巳午'.includes(char)) return 'text-red-600';     // 火
     if ('戊己辰戌丑未'.includes(char)) return 'text-amber-700'; // 土
     if ('庚辛申酉'.includes(char)) return 'text-zinc-400';   // 金
     if ('壬癸亥子'.includes(char)) return 'text-blue-600';    // 水
     return 'text-ink-900';
-  };
+  }, []);
 
   const toggleCalendarType = (type: 'solar' | 'lunar') => {
     if (type === birthInfo.calendarType) return;
@@ -309,49 +312,75 @@ export default function App() {
     if (selectedSystems.length === 0) return;
     setIsCalculating(true);
     
-    // Construct date for calculation
-    let date: Date;
-    if (birthInfo.calendarType === 'lunar') {
-      const lunar = Lunar.fromYmd(birthInfo.year, birthInfo.isLeap ? -birthInfo.month : birthInfo.month, birthInfo.day);
-      const solar = lunar.getSolar();
-      date = new Date(solar.getYear(), solar.getMonth() - 1, solar.getDay(), birthInfo.hour, birthInfo.minute);
-    } else {
-      date = new Date(birthInfo.year, birthInfo.month - 1, birthInfo.day, birthInfo.hour, birthInfo.minute);
-    }
-    
-    await new Promise(r => setTimeout(r, 1500));
-    
-    const data: any = {
-      zodiac: getZodiac(date),
-      westernZodiac: getWesternZodiac(date),
-      boneWeight: calculateBoneWeight(date),
-    };
-
-    if (selectedSystems.includes('bazi')) data.bazi = calculateBazi(date);
-    if (selectedSystems.includes('ziwei')) data.ziwei = calculateZiwei(date, birthInfo.gender);
-    if (selectedSystems.includes('western')) data.western = calculateWesternAstrology(date);
-    if (selectedSystems.includes('mbti')) data.mbti = mbti;
-
-    if (saveToHistory && user) {
-      try {
-        await saveFateRecord({
-          uid: user.uid,
-          name: birthInfo.name,
-          birthInfo,
-          fateData: data
-        });
-        loadHistory(user.uid);
-      } catch (err) {
-        console.error('Failed to save history:', err);
+    try {
+      // Construct date for calculation
+      let date: Date;
+      if (birthInfo.calendarType === 'lunar') {
+        const lunar = Lunar.fromYmd(birthInfo.year, birthInfo.isLeap ? -birthInfo.month : birthInfo.month, birthInfo.day);
+        const solar = lunar.getSolar();
+        date = new Date(solar.getYear(), solar.getMonth() - 1, solar.getDay(), birthInfo.hour, birthInfo.minute);
+      } else {
+        date = new Date(birthInfo.year, birthInfo.month - 1, birthInfo.day, birthInfo.hour, birthInfo.minute);
       }
-    }
+      
+      // Simulate calculation delay for better UX
+      await new Promise(r => setTimeout(r, 1500));
+      
+      const data: any = {
+        zodiac: getZodiac(date),
+        westernZodiac: getWesternZodiac(date),
+        boneWeight: calculateBoneWeight(date),
+      };
 
-    setFateData(data);
-    setStep('dashboard');
-    setIsCalculating(false);
-    setActiveTab(selectedSystems[0]);
-    setShowSuccessToast(true);
-    setTimeout(() => setShowSuccessToast(false), 3000);
+      if (selectedSystems.includes('bazi')) {
+        try {
+          data.bazi = calculateBazi(date);
+        } catch (err) {
+          console.error('Failed to calculate bazi:', err);
+        }
+      }
+      if (selectedSystems.includes('ziwei')) {
+        try {
+          data.ziwei = calculateZiwei(date, birthInfo.gender);
+        } catch (err) {
+          console.error('Failed to calculate ziwei:', err);
+        }
+      }
+      if (selectedSystems.includes('western')) {
+        try {
+          data.western = calculateWesternAstrology(date);
+        } catch (err) {
+          console.error('Failed to calculate western:', err);
+        }
+      }
+      if (selectedSystems.includes('mbti')) {
+        data.mbti = mbti;
+      }
+
+      if (saveToHistory && user) {
+        try {
+          await saveFateRecord({
+            uid: user.uid,
+            name: birthInfo.name,
+            birthInfo,
+            fateData: data
+          });
+          loadHistory(user.uid);
+        } catch (err) {
+          console.error('Failed to save history:', err);
+        }
+      }
+
+      setFateData(data);
+      setStep('dashboard');
+      setActiveTab(selectedSystems[0]);
+      setShowSuccessToast(true);
+    } catch (error) {
+      console.error('Calculation failed:', error);
+      alert('测算失败，请稍后再试');
+    } finally {
+      setIsCalculating(false);
+    }
   };
 
   const unlockAiInterpretation = async () => {
@@ -400,7 +429,7 @@ export default function App() {
         <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-12">
             <div className="flex items-center gap-2">
-              <h1 className="text-xl font-serif tracking-tight text-ink-900">iChingFate</h1>
+              <h1 className="text-xl font-serif tracking-tight text-ink-900">悬壶承光</h1>
             </div>
             <nav className="hidden md:flex items-center gap-8 text-[10px] uppercase tracking-[0.2em] font-bold text-ink-400">
               <a href="#" className="hover:text-ink-900 transition-colors flex items-center gap-1.5">
@@ -726,38 +755,40 @@ export default function App() {
                     )}
                   </div>
 
-                  {/* MBTI Selection */}
-                  <div className="space-y-6 pt-4">
-                    <div className="flex items-center gap-2">
-                      <Fingerprint className="w-4 h-4 text-ink-400" />
-                      <label className="text-[10px] uppercase tracking-[0.2em] text-ink-400 font-bold">性格倾向 / MBTI (可选)</label>
+                  {/* MBTI Selection - Only show if mbti is selected in systems */}
+                  {selectedSystems.includes('mbti') && (
+                    <div className="space-y-6 pt-4">
+                      <div className="flex items-center gap-2">
+                        <Fingerprint className="w-4 h-4 text-ink-400" />
+                        <label className="text-[10px] uppercase tracking-[0.2em] text-ink-400 font-bold">性格倾向 / MBTI</label>
+                      </div>
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        {[
+                          { key: 'energy', options: [{v: 'E', l: '外向 E'}, {v: 'I', l: '内向 I'}] },
+                          { key: 'perception', options: [{v: 'S', l: '实感 S'}, {v: 'N', l: '直觉 N'}] },
+                          { key: 'judgment', options: [{v: 'T', l: '思考 T'}, {v: 'F', l: '情感 F'}] },
+                          { key: 'lifestyle', options: [{v: 'J', l: '判断 J'}, {v: 'P', l: '知觉 P'}] },
+                        ].map((group) => (
+                          <div key={group.key} className="flex flex-col gap-2">
+                            {group.options.map(opt => (
+                              <button
+                                key={opt.v}
+                                onClick={() => setMbti({...mbti, [group.key]: opt.v})}
+                                className={cn(
+                                  "py-2 text-[10px] border transition-all font-bold",
+                                  (mbti as any)[group.key] === opt.v
+                                    ? "bg-ink-900 text-paper-50 border-ink-900"
+                                    : "border-paper-200 text-ink-400 hover:border-ink-300 bg-white"
+                                )}
+                              >
+                                {opt.l}
+                              </button>
+                            ))}
+                          </div>
+                        ))}
+                      </div>
                     </div>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                      {[
-                        { key: 'energy', options: [{v: 'E', l: '外向 E'}, {v: 'I', l: '内向 I'}] },
-                        { key: 'perception', options: [{v: 'S', l: '实感 S'}, {v: 'N', l: '直觉 N'}] },
-                        { key: 'judgment', options: [{v: 'T', l: '思考 T'}, {v: 'F', l: '情感 F'}] },
-                        { key: 'lifestyle', options: [{v: 'J', l: '判断 J'}, {v: 'P', l: '知觉 P'}] },
-                      ].map((group) => (
-                        <div key={group.key} className="flex flex-col gap-2">
-                          {group.options.map(opt => (
-                            <button
-                              key={opt.v}
-                              onClick={() => setMbti({...mbti, [group.key]: opt.v})}
-                              className={cn(
-                                "py-2 text-[10px] border transition-all font-bold",
-                                (mbti as any)[group.key] === opt.v
-                                  ? "bg-ink-900 text-paper-50 border-ink-900"
-                                  : "border-paper-200 text-ink-400 hover:border-ink-300 bg-white"
-                              )}
-                            >
-                              {opt.l}
-                            </button>
-                          ))}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
+                  )}
                 </div>
               </section>
 
@@ -828,10 +859,12 @@ export default function App() {
                       <span className="text-[10px] uppercase tracking-widest text-ink-400 font-bold">西洋星座 / WESTERN</span>
                       <span className="font-medium text-ink-900">{fateData.westernZodiac}座</span>
                     </div>
-                    <div className="flex justify-between items-center border-b border-paper-100 pb-3">
-                      <span className="text-[10px] uppercase tracking-widest text-ink-400 font-bold">性格倾向 / MBTI</span>
-                      <span className="font-medium text-ink-900">{fateData.mbti.energy}{fateData.mbti.perception}{fateData.mbti.judgment}{fateData.mbti.lifestyle}</span>
-                    </div>
+                    {fateData.mbti && (
+                      <div className="flex justify-between items-center border-b border-paper-100 pb-3">
+                        <span className="text-[10px] uppercase tracking-widest text-ink-400 font-bold">性格倾向 / MBTI</span>
+                        <span className="font-medium text-ink-900">{fateData.mbti.energy}{fateData.mbti.perception}{fateData.mbti.judgment}{fateData.mbti.lifestyle}</span>
+                      </div>
+                    )}
                     {fateData.bazi && (
                       <div className="flex justify-between items-center border-b border-paper-100 pb-3">
                         <span className="text-[10px] uppercase tracking-widest text-ink-400 font-bold">日主强弱 / STRENGTH</span>
@@ -848,33 +881,35 @@ export default function App() {
                   </div>
                 </div>
 
-                <div className="lg:col-span-2 bg-white/50 backdrop-blur-sm border border-paper-200 rounded-3xl p-12 flex flex-col justify-center">
-                  <p className="text-[9px] uppercase tracking-[0.3em] text-ink-400 font-bold mb-12">ENERGY BALANCE</p>
-                  <div className="grid grid-cols-5 gap-8">
-                    {Object.entries(fateData.bazi.fiveElements).map(([el, data]: [any, any]) => (
-                      <div key={el} className="space-y-6 group cursor-pointer flex flex-col items-center">
-                        <div className="relative w-3 h-64 bg-paper-50/30 rounded-full overflow-hidden border border-paper-100 transition-all group-hover:border-gold-300">
-                          <motion.div 
-                            initial={{ height: 0 }}
-                            animate={{ height: `${data.percentage}%` }}
-                            className={cn(
-                              "absolute bottom-0 left-0 right-0 transition-all duration-1000",
-                              el === '木' ? 'bg-[#A7F3D0]' :
-                              el === '火' ? 'bg-[#FECACA]' :
-                              el === '土' ? 'bg-[#FDE68A]' :
-                              el === '金' ? 'bg-[#E5E7EB]' :
-                              'bg-[#BFDBFE]'
-                            )}
-                          />
+                {fateData.bazi && (
+                  <div className="lg:col-span-2 bg-white/50 backdrop-blur-sm border border-paper-200 rounded-3xl p-12 flex flex-col justify-center">
+                    <p className="text-[9px] uppercase tracking-[0.3em] text-ink-400 font-bold mb-12">ENERGY BALANCE</p>
+                    <div className="grid grid-cols-5 gap-8">
+                      {Object.entries(fateData.bazi.fiveElements).map(([el, data]: [any, any]) => (
+                        <div key={el} className="space-y-6 group cursor-pointer flex flex-col items-center">
+                          <div className="relative w-3 h-64 bg-paper-50/30 rounded-full overflow-hidden border border-paper-100 transition-all group-hover:border-gold-300">
+                            <motion.div 
+                              initial={{ height: 0 }}
+                              animate={{ height: `${data.percentage}%` }}
+                              className={cn(
+                                "absolute bottom-0 left-0 right-0 transition-all duration-1000",
+                                el === '木' ? 'bg-[#A7F3D0]' :
+                                el === '火' ? 'bg-[#FECACA]' :
+                                el === '土' ? 'bg-[#FDE68A]' :
+                                el === '金' ? 'bg-[#E5E7EB]' :
+                                'bg-[#BFDBFE]'
+                              )}
+                            />
+                          </div>
+                          <div className="text-center space-y-1">
+                            <p className="text-[10px] font-serif italic text-ink-400">{data.percentage}%</p>
+                            <p className="text-sm font-serif text-ink-900 group-hover:text-gold-600 transition-colors">{el}</p>
+                          </div>
                         </div>
-                        <div className="text-center space-y-1">
-                          <p className="text-[10px] font-serif italic text-ink-400">{data.percentage}%</p>
-                          <p className="text-sm font-serif text-ink-900 group-hover:text-gold-600 transition-colors">{el}</p>
-                        </div>
-                      </div>
-                    ))}
+                      ))}
+                    </div>
                   </div>
-                </div>
+                )}
               </section>
 
               {/* Chart Section */}
@@ -1005,31 +1040,35 @@ export default function App() {
 
                       {/* Day Master Section */}
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div className="bg-white border border-paper-200 rounded-2xl p-6 space-y-4">
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-2">
-                              <Sparkles className="w-5 h-5 text-emerald-500" />
-                              <h4 className="font-serif text-lg">日主</h4>
+                        {fateData.bazi && (
+                          <div className="bg-white border border-paper-200 rounded-2xl p-6 space-y-4">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <Sparkles className="w-5 h-5 text-emerald-500" />
+                                <h4 className="font-serif text-lg">日主</h4>
+                              </div>
+                              <span className="bg-emerald-50 text-emerald-600 px-3 py-1 rounded-full text-xs font-medium">{fateData.bazi.dayMaster.element}</span>
                             </div>
-                            <span className="bg-emerald-50 text-emerald-600 px-3 py-1 rounded-full text-xs font-medium">{fateData.bazi.dayMaster.element}</span>
+                            <p className="text-sm text-ink-600 leading-relaxed">{fateData.bazi.dayMaster.description}</p>
                           </div>
-                          <p className="text-sm text-ink-600 leading-relaxed">{fateData.bazi.dayMaster.description}</p>
-                        </div>
+                        )}
 
-                        <div className="bg-white border border-paper-200 rounded-2xl p-6 space-y-4">
-                          <div className="flex items-center gap-2">
-                            <Compass className="w-5 h-5 text-gold-500" />
-                            <h4 className="font-serif text-lg">称骨算命</h4>
-                          </div>
-                          <div className="flex items-center justify-center py-2">
-                            <div className="bg-gold-50/50 border border-gold-100 rounded-full px-6 py-2 text-gold-800 font-serif">
-                              称骨重量：<span className="text-xl font-bold">{fateData.boneWeight.weight}</span>
+                        {fateData.boneWeight && (
+                          <div className="bg-white border border-paper-200 rounded-2xl p-6 space-y-4">
+                            <div className="flex items-center gap-2">
+                              <Compass className="w-5 h-5 text-gold-500" />
+                              <h4 className="font-serif text-lg">称骨算命</h4>
+                            </div>
+                            <div className="flex items-center justify-center py-2">
+                              <div className="bg-gold-50/50 border border-gold-100 rounded-full px-6 py-2 text-gold-800 font-serif">
+                                称骨重量：<span className="text-xl font-bold">{fateData.boneWeight.weight}</span>
+                              </div>
+                            </div>
+                            <div className="bg-paper-50/50 rounded-xl p-4 text-xs text-ink-500 text-center italic">
+                              {fateData.boneWeight.fortune}
                             </div>
                           </div>
-                          <div className="bg-paper-50/50 rounded-xl p-4 text-xs text-ink-500 text-center italic">
-                            {fateData.boneWeight.fortune}
-                          </div>
-                        </div>
+                        )}
                       </div>
 
                       {/* Energy Distribution */}
@@ -1510,19 +1549,10 @@ export default function App() {
         </div>
       </footer>
 
-      <AnimatePresence>
-        {showSuccessToast && (
-          <motion.div
-            initial={{ opacity: 0, y: 50 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 50 }}
-            className="fixed bottom-8 left-1/2 -translate-x-1/2 bg-ink-900 text-paper-50 px-8 py-4 rounded-full shadow-2xl z-50 flex items-center gap-3"
-          >
-            <CheckCircle2 className="w-5 h-5 text-emerald-400" />
-            <span className="text-sm font-medium tracking-wide">推演成功，已为您生成命理报告</span>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      <SuccessToast 
+        show={showSuccessToast} 
+        onClose={() => setShowSuccessToast(false)}
+      />
     </div>
     </ErrorBoundary>
   );

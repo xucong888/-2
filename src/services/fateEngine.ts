@@ -187,40 +187,40 @@ function calculateFiveElements(eightChar: any): BaziData['fiveElements'] {
     eightChar.getTimeZhi()
   ];
 
-  // Professional Weights (Total 1000 points)
-  // Stems: 80 each (Total 320)
-  // Year Branch: 100
-  // Month Branch: 300 (The most important)
-  // Day Branch: 140
-  // Hour Branch: 140
+  // 优化后的专业权重计算
+  // 天干：各 100 分（共 400 分）
+  // 地支藏干：年支 100，月支 450（月令权重 1.5 倍），日支 150，时支 150
+  // 总计：1150 分基准
   
   stems.forEach(s => {
     const el = getElement(s);
-    if (el) elements[el as keyof typeof elements] += 80;
+    if (el) elements[el as keyof typeof elements] += 100;
   });
 
-  const branchWeights = [100, 300, 140, 140]; // Year, Month, Day, Hour
+  // 月令权重 1.5 倍：月支 450 分（本气 60% = 270，中气 30% = 135，余气 10% = 45）
+  const branchWeights = [100, 450, 150, 150]; // Year, Month (1.5x), Day, Hour
   
-  const zhiHideGan: Record<string, Record<string, number>> = {
-    '子': { '癸': 100 },
-    '丑': { '己': 60, '癸': 30, '辛': 10 },
-    '寅': { '甲': 60, '丙': 30, '戊': 10 },
-    '卯': { '乙': 100 },
-    '辰': { '戊': 60, '乙': 30, '癸': 10 },
-    '巳': { '丙': 60, '庚': 30, '戊': 10 },
-    '午': { '丁': 70, '己': 30 },
-    '未': { '己': 60, '丁': 30, '乙': 10 },
-    '申': { '庚': 60, '壬': 30, '戊': 10 },
-    '酉': { '辛': 100 },
-    '戌': { '戊': 60, '辛': 30, '丁': 10 },
-    '亥': { '壬': 70, '甲': 30 }
+  // 地支藏干权重（本气/中气/余气）
+  const zhiHideGan: Record<string, { gan: string; weight: number }[]> = {
+    '子': [{ gan: '癸', weight: 100 }],
+    '丑': [{ gan: '己', weight: 60 }, { gan: '癸', weight: 30 }, { gan: '辛', weight: 10 }],
+    '寅': [{ gan: '甲', weight: 60 }, { gan: '丙', weight: 30 }, { gan: '戊', weight: 10 }],
+    '卯': [{ gan: '乙', weight: 100 }],
+    '辰': [{ gan: '戊', weight: 60 }, { gan: '乙', weight: 30 }, { gan: '癸', weight: 10 }],
+    '巳': [{ gan: '丙', weight: 60 }, { gan: '庚', weight: 30 }, { gan: '戊', weight: 10 }],
+    '午': [{ gan: '丁', weight: 70 }, { gan: '己', weight: 30 }],
+    '未': [{ gan: '己', weight: 60 }, { gan: '丁', weight: 30 }, { gan: '乙', weight: 10 }],
+    '申': [{ gan: '庚', weight: 60 }, { gan: '壬', weight: 30 }, { gan: '戊', weight: 10 }],
+    '酉': [{ gan: '辛', weight: 100 }],
+    '戌': [{ gan: '戊', weight: 60 }, { gan: '辛', weight: 30 }, { gan: '丁', weight: 10 }],
+    '亥': [{ gan: '壬', weight: 70 }, { gan: '甲', weight: 30 }]
   };
 
   branches.forEach((b, i) => {
     const weight = branchWeights[i];
     const hides = zhiHideGan[b];
     if (hides) {
-      Object.entries(hides).forEach(([gan, percent]) => {
+      hides.forEach(({ gan, weight: percent }) => {
         const el = getElement(gan);
         if (el) elements[el as keyof typeof elements] += (weight * percent) / 100;
       });
